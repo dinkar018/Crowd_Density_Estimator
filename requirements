@@ -1,0 +1,15 @@
+# CAN + CBAM Crowd Density Estimation System
+# Python 3.8+, CUDA recommended
+
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.21.0
+scipy>=1.7.0
+h5py>=3.0.0
+Pillow>=9.0.0
+matplotlib>=3.5.0
+tqdm>=4.64.0
+flask>=2.0.0
+tensorboard>=2.10.0
+pandas>=1.4.0
+scikit-image>=0.19.0

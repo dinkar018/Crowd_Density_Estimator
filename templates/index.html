@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-powered crowd density estimation using CAN+CBAM with multi-scale context-aware feature extraction and human segmentation">
+    <title>CrowdVision CAN — Context-Aware Crowd Density Estimator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ── CSS Reset & Variables ── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-primary: #060a14;
+            --bg-secondary: #0d1321;
+            --bg-card: rgba(13, 19, 33, 0.75);
+            --bg-glass: rgba(255, 255, 255, 0.03);
+            --border-glass: rgba(255, 255, 255, 0.07);
+            --border-active: rgba(56, 189, 248, 0.4);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #38bdf8;
+            --accent-secondary: #818cf8;
+            --accent-tertiary: #a78bfa;
+            --accent-glow: rgba(56, 189, 248, 0.2);
+            --success: #34d399;
+            --success-glow: rgba(52, 211, 153, 0.15);
+            --warning: #fbbf24;
+            --error: #f87171;
+            --gradient-primary: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #a78bfa 100%);
+            --gradient-warm: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+            --gradient-bg: radial-gradient(ellipse at 15% 50%, rgba(56, 189, 248, 0.06) 0%, transparent 60%),
+                           radial-gradient(ellipse at 85% 20%, rgba(129, 140, 248, 0.05) 0%, transparent 50%),
+                           radial-gradient(ellipse at 50% 80%, rgba(167, 139, 250, 0.04) 0%, transparent 40%);
+            --shadow-glow: 0 0 40px rgba(56, 189, 248, 0.12);
+            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --radius-xs: 6px;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--gradient-bg);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Layout ── */
+        .app-container {
+            position: relative;
+            z-index: 1;
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
+        /* ── Header ── */
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        .header__badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 100px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--accent-primary);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        .header__badge::before {
+            content: '';
+            width: 6px; height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .header__title {
+            font-size: clamp(2.2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.03em;
+        }
+
+        .header__subtitle {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+            max-width: 650px;
+            margin: 0 auto;
+        }
+
+        /* ── Architecture Info ── */
+        .architecture-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.8s ease-out 0.15s both;
+        }
+
+        .arch-badge {
+            padding: 0.3rem 0.85rem;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 100px;
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: var(--transition);
+        }
+
+        .arch-badge--accent {
+            background: rgba(56, 189, 248, 0.08);
+            border-color: rgba(56, 189, 248, 0.2);
+            color: var(--accent-primary);
+        }
+
+        .arch-badge--warm {
+            background: rgba(249, 115, 22, 0.08);
+            border-color: rgba(249, 115, 22, 0.2);
+            color: #fb923c;
+        }
+
+        .arch-badge--unified {
+            background: rgba(52, 211, 153, 0.08);
+            border-color: rgba(52, 211, 153, 0.25);
+            color: var(--success);
+            font-weight: 700;
+        }
+
+        /* ── Upload Area ── */
+        .upload-area {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.8s ease-out 0.3s both;
+        }
+
+        .upload-zone {
+            background: var(--bg-card);
+            border: 2px dashed var(--border-glass);
+            border-radius: var(--radius);
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.drag-over {
+            border-color: var(--accent-primary);
+            background: rgba(56, 189, 248, 0.04);
+            box-shadow: var(--shadow-glow);
+            transform: translateY(-2px);
+        }
+
+        .upload-zone__icon,
+        .upload-zone__text,
+        .upload-zone__hint {
+            pointer-events: none;
+        }
+
+        .upload-zone__icon {
+            width: 56px; height: 56px;
+            margin: 0 auto 1rem;
+            background: var(--gradient-primary);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 8px 32px rgba(56, 189, 248, 0.2);
+        }
+
+        .upload-zone--json .upload-zone__icon {
+            background: var(--gradient-warm);
+            box-shadow: 0 8px 32px rgba(249, 115, 22, 0.2);
+        }
+
+        .upload-zone__text {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-zone__hint {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .upload-zone input[type="file"] { display: none; }
+
+        /* ── Loading ── */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(6, 10, 20, 0.88);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .loading-overlay.active { display: flex; }
+
+        .spinner {
+            width: 56px; height: 56px;
+            border: 3px solid var(--border-glass);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading-text {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .loading-steps {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        /* ── Results ── */
+        .results {
+            display: none;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .results.visible { display: block; }
+
+        /* ── Count Card ── */
+        .count-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius);
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-card);
+        }
+
+        .count-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+        }
+
+        .count-card__label {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .count-card__value {
+            font-size: clamp(3rem, 8vw, 5rem);
+            font-weight: 800;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.1;
+            margin-bottom: 0.25rem;
+        }
+
+        .count-card__unit {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        /* ── Comparison Card ── */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-glass);
+        }
+
+        .comp-stat {
+            text-align: center;
+        }
+
+        .comp-stat__label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+
+        .comp-stat__value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .comp-stat__value--pred { color: var(--accent-primary); }
+        .comp-stat__value--gt { color: var(--warning); }
+        .comp-stat__value--error { color: var(--error); }
+
+        .count-card__meta {
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .count-card__tag {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            padding: 0.3rem 0.8rem;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 100px;
+        }
+
+        .count-card__tag--scene {
+            background: rgba(56, 189, 248, 0.1);
+            border-color: rgba(56, 189, 248, 0.2);
+            color: var(--accent-primary);
+            font-weight: 600;
+        }
+
+
+        /* ── Image Grid ── */
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .image-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius);
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            transition: var(--transition);
+            box-shadow: var(--shadow-card);
+        }
+
+        .image-card:hover {
+            border-color: var(--border-active);
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .image-card__header {
+            padding: 0.85rem 1.15rem;
+            border-bottom: 1px solid var(--border-glass);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .image-card__dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+        }
+
+        .image-card__dot--original { background: #3b82f6; }
+        .image-card__dot--heatmap { background: #ef4444; }
+        .image-card__dot--overlay { background: #10b981; }
+        .image-card__dot--mask { background: #f59e0b; }
+        .image-card__dot--gt { background: #fbbf24; }
+
+        .image-card__title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .image-card__body { padding: 0; }
+
+        .image-card img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* ── Controls ── */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.8s ease-out 0.4s both;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.9rem 2.5rem;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 700;
+            font-family: inherit;
+            transition: var(--transition);
+            box-shadow: 0 8px 32px rgba(56, 189, 248, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(56, 189, 248, 0.45);
+        }
+
+        .btn-primary:disabled {
+            background: var(--bg-glass);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .mode-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.85rem;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }
+
+        .mode-badge--standard {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent-primary);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .mode-badge--comparison {
+            background: rgba(251, 191, 36, 0.1);
+            color: var(--warning);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+        }
+
+        /* ── Action Button ── */
+        .action-bar {
+            text-align: center;
+            margin-top: 2rem;
+        }
+
+        .btn-reset {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 2rem;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            font-family: inherit;
+            transition: var(--transition);
+        }
+
+        .btn-reset:hover {
+            background: rgba(56, 189, 248, 0.08);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+        }
+
+        /* ── Error Toast ── */
+        .error-toast {
+            display: none;
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(248, 113, 113, 0.12);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            color: #fca5a5;
+            padding: 0.8rem 1.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-weight: 500;
+            z-index: 2000;
+            backdrop-filter: blur(12px);
+        }
+
+        .error-toast.visible {
+            display: block;
+            animation: fadeInUp 0.3s ease-out;
+        }
+
+        /* ── Animations ── */
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        @keyframes countUp {
+            from { opacity: 0; transform: scale(0.5); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .count-animate {
+            animation: countUp 0.5s ease-out;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .app-container { padding: 1rem; }
+            .image-grid { grid-template-columns: 1fr; }
+            .upload-zone { padding: 2rem 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header__badge">
+                <span>CAN + CBAM + Segmentation · Unified Model</span>
+            </div>
+            <h1 class="header__title">CrowdVision CAN</h1>
+            <p class="header__subtitle">
+                Context-Aware crowd density estimation with multi-scale feature extraction,
+                attention-based deep learning, and human segmentation preprocessing
+            </p>
+        </header>
+
+        <!-- Architecture Badges -->
+        <div class="architecture-info">
+            <span class="arch-badge arch-badge--unified">★ Single Unified Model</span>
+            <span class="arch-badge arch-badge--accent">VGG-16 Backbone</span>
+            <span class="arch-badge arch-badge--accent">Multi-Scale SAM (d=1,2,3,6)</span>
+            <span class="arch-badge arch-badge--accent">CBAM Attention × 3</span>
+            <span class="arch-badge arch-badge--warm">DeepLabV3 Segmentation</span>
+            <span class="arch-badge">ShanghaiTech A+B Merged</span>
+        </div>
+
+        <!-- Model Info Card -->
+        <div class="count-card" id="modelInfoCard" style="margin-bottom: 2rem; padding: 1.25rem;">
+            <div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap;">
+                <div style="text-align: center;">
+                    <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Combined MAE</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: var(--accent-primary);" id="infoMAE">—</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Part A MAE</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: var(--accent-secondary);" id="infoMAE_A">—</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Part B MAE</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: var(--accent-tertiary);" id="infoMAE_B">—</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Device</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: var(--success);" id="infoDevice">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug Info -->
+        <div id="debugInfo" style="display: none; background: rgba(56, 189, 248, 0.05); border: 1px solid var(--border-glass); border-radius: var(--radius-xs); padding: 0.5rem; margin-bottom: 2rem; font-family: monospace; font-size: 0.65rem; color: var(--text-muted);">
+            Status: Idle
+        </div>
+
+        <!-- Upload Area -->
+        <div class="upload-area" id="uploadArea">
+            <!-- Image Upload -->
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-zone__icon">📸</div>
+                <div class="upload-zone__text">Select Image</div>
+                <div class="upload-zone__hint">Supports JPG, JPEG, PNG — Max 16MB</div>
+            </div>
+
+            <!-- JSON Upload -->
+            <div class="upload-zone upload-zone--json" id="jsonZone">
+                <div class="upload-zone__icon">📄</div>
+                <div class="upload-zone__text">Add Annotation (Optional)</div>
+                <div class="upload-zone__hint">VIA 3.x JSON format</div>
+            </div>
+        </div>
+
+        <!-- Hidden Inputs -->
+        <div style="position: absolute; overflow: hidden; width: 0; height: 0;">
+            <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,image/*">
+            <input type="file" id="jsonInput" accept=".json">
+        </div>
+
+        <!-- Controls -->
+        <div class="controls" id="controls">
+            <button class="btn-primary" id="analyzeBtn" disabled>
+                <span>⚡ Run AI Analysis</span>
+            </button>
+        </div>
+
+        <!-- Results -->
+        <div class="results" id="results">
+            <!-- Mode Header -->
+            <div style="text-align: center;">
+                <div id="activeModeBadge" class="mode-badge"></div>
+            </div>
+
+            <!-- Count Card -->
+            <div class="count-card" id="countCard">
+                <div class="count-card__label">Estimated Crowd Count</div>
+                <div class="count-card__value count-animate" id="countValue">—</div>
+                <div class="count-card__unit">people detected</div>
+                <div class="count-card__meta">
+                    <span class="count-card__tag count-card__tag--scene" id="sceneTag"></span>
+                    <span class="count-card__tag" id="fileName"></span>
+                </div>
+
+                <!-- Comparison Grid (Hidden by default) -->
+                <div class="comparison-grid" id="comparisonGrid" style="display: none;">
+                    <div class="comp-stat">
+                        <div class="comp-stat__label">AI Predicted</div>
+                        <div class="comp-stat__value comp-stat__value--pred" id="compPred">0</div>
+                    </div>
+                    <div class="comp-stat">
+                        <div class="comp-stat__label">Ground Truth</div>
+                        <div class="comp-stat__value comp-stat__value--gt" id="compGT">0</div>
+                    </div>
+                    <div class="comp-stat">
+                        <div class="comp-stat__label">Error (AE)</div>
+                        <div class="comp-stat__value comp-stat__value--error" id="compError">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Image Grid -->
+            <div class="image-grid" id="imageGrid">
+                <div class="image-card" id="originalCard">
+                    <div class="image-card__header">
+                        <div class="image-card__dot image-card__dot--original"></div>
+                        <div class="image-card__title">Original Image</div>
+                    </div>
+                    <div class="image-card__body">
+                        <img id="originalImage" alt="Original Image">
+                    </div>
+                </div>
+
+                <div class="image-card" id="maskCard" style="display: none;">
+                    <div class="image-card__header">
+                        <div class="image-card__dot image-card__dot--mask"></div>
+                        <div class="image-card__title">Segmentation Mask</div>
+                    </div>
+                    <div class="image-card__body">
+                        <img id="maskImage" alt="Segmentation Mask">
+                    </div>
+                </div>
+
+                <div class="image-card" id="heatmapCard">
+                    <div class="image-card__header">
+                        <div class="image-card__dot image-card__dot--heatmap"></div>
+                        <div class="image-card__title">Density Heatmap</div>
+                    </div>
+                    <div class="image-card__body">
+                        <img id="heatmapImage" alt="Density Heatmap">
+                    </div>
+                </div>
+
+                <div class="image-card" id="gtHeatmapCard" style="display: none;">
+                    <div class="image-card__header">
+                        <div class="image-card__dot image-card__dot--gt"></div>
+                        <div class="image-card__title">GT Density Heatmap</div>
+                    </div>
+                    <div class="image-card__body">
+                        <img id="gtHeatmapImage" alt="GT Density Heatmap">
+                    </div>
+                </div>
+
+                <div class="image-card" id="overlayCard">
+                    <div class="image-card__header">
+                        <div class="image-card__dot image-card__dot--overlay"></div>
+                        <div class="image-card__title">AI Heatmap Overlay</div>
+                    </div>
+                    <div class="image-card__body">
+                        <img id="overlayImage" alt="AI Heatmap Overlay">
+                    </div>
+                </div>
+
+                <div class="image-card" id="gtOverlayCard" style="display: none;">
+                    <div class="image-card__header">
+                        <div class="image-card__dot image-card__dot--gt"></div>
+                        <div class="image-card__title">GT Heatmap Overlay</div>
+                    </div>
+                    <div class="image-card__body">
+                        <img id="gtOverlayImage" alt="GT Heatmap Overlay">
+                    </div>
+                </div>
+
+                <div class="image-card" id="gtCard" style="display: none;">
+                    <div class="image-card__header">
+                        <div class="image-card__dot image-card__dot--gt"></div>
+                        <div class="image-card__title">GT Point Annotations</div>
+                    </div>
+                    <div class="image-card__body">
+                        <img id="gtImage" alt="GT Point Annotations">
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Reset Button -->
+            <div class="action-bar">
+                <button class="btn-reset" id="resetBtn">
+                    ↻ Analyze Another Image
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            CAN + CBAM with Human Segmentation · Unified Model · ShanghaiTech Part A + B Merged Training
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Analyzing crowd density...</div>
+        <div class="loading-steps">
+            Step 1: Human segmentation preprocessing<br>
+            Step 2: Multi-scale context-aware feature extraction<br>
+            Step 3: CBAM attention refinement<br>
+            Step 4: Density map generation
+        </div>
+    </div>
+
+    <!-- Error Toast -->
+    <div class="error-toast" id="errorToast"></div>
+
+    <script>
+        console.log("CrowdVision JS: Initializing...");
+        
+        // ── DOM Elements ──
+        const uploadZone = document.getElementById('uploadZone');
+        const jsonZone = document.getElementById('jsonZone');
+        const fileInput = document.getElementById('fileInput');
+        const jsonInput = document.getElementById('jsonInput');
+        const results = document.getElementById('results');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const errorToast = document.getElementById('errorToast');
+        const resetBtn = document.getElementById('resetBtn');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const uploadArea = document.getElementById('uploadArea');
+        const controls = document.getElementById('controls');
+        const activeModeBadge = document.getElementById('activeModeBadge');
+        
+        let selectedFile = null;
+        let selectedJson = null;
+
+        // Visual indicator that JS has successfully executed to this point
+        const debugInfo = document.getElementById('debugInfo');
+        if (debugInfo) {
+            debugInfo.style.display = 'block';
+            debugInfo.textContent = 'Status: JS Initialized Successfully. Ready for drag & drop or click.';
+        }
+
+        function updateUIState() {
+            analyzeBtn.disabled = !selectedFile;
+            if (selectedFile) {
+                analyzeBtn.querySelector('span').textContent = selectedJson 
+                    ? '⚡ Run Comparison Mode' 
+                    : '⚡ Run Standard Mode';
+            }
+        }
+
+        // ── Load model info on startup ──
+        async function loadModelInfo() {
+            try {
+                const resp = await fetch('/model_info');
+                const data = await resp.json();
+                if (data.combined_mae && data.combined_mae !== 'N/A') {
+                    document.getElementById('infoMAE').textContent =
+                        typeof data.combined_mae === 'number'
+                            ? data.combined_mae.toFixed(2) : data.combined_mae;
+                }
+                if (data.mae_A) {
+                    document.getElementById('infoMAE_A').textContent = data.mae_A;
+                }
+                if (data.mae_B) {
+                    document.getElementById('infoMAE_B').textContent = data.mae_B;
+                }
+                if (data.device) {
+                    document.getElementById('infoDevice').textContent =
+                        data.device.includes('cuda') ? 'GPU' : 'CPU';
+                }
+            } catch (e) {
+                console.warn('Could not load model info:', e);
+            }
+        }
+        loadModelInfo();
+
+        // ── Ultra-Reliable Drag & Drop Handling ──
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            window.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            this.classList.remove('drag-over');
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            console.log("Drop detected on:", this.id, "Files:", files.length);
+            
+            if (files.length > 0) {
+                const file = files[0];
+                const filename = (file.name || "").trim();
+                const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|bmp)$/i.test(filename);
+                const isJson = filename.toLowerCase().endsWith('.json') || file.type === 'application/json';
+
+                if (this.id === 'uploadZone') {
+                    if (isImage) {
+                        selectedFile = file;
+                        this.querySelector('.upload-zone__text').textContent = filename;
+                        this.style.borderColor = 'var(--accent-primary)';
+                        updateUIState();
+                    } else {
+                        showError('Detected: ' + filename + '. Please drop a valid image file.');
+                    }
+                } else if (this.id === 'jsonZone') {
+                    if (isJson) {
+                        selectedJson = file;
+                        console.log("JSON selected via drop:", selectedJson.name);
+                        jsonZone.querySelector('.upload-zone__text').textContent = filename;
+                        jsonZone.style.borderColor = 'var(--warning)';
+                        updateUIState();
+                    } else {
+                        showError('Detected: ' + filename + '. Please drop a .json file.');
+                    }
+                }
+            }
+        }
+
+        // Initialize Listeners
+        [uploadZone, jsonZone].forEach(zone => {
+            zone.addEventListener('dragenter', handleDragOver, false);
+            zone.addEventListener('dragover', handleDragOver, false);
+            zone.addEventListener('dragleave', handleDragLeave, false);
+            zone.addEventListener('drop', handleDrop, false);
+            
+            // Single click to browse
+            zone.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log("Zone clicked:", zone.id);
+                if (zone.id === 'uploadZone') fileInput.click();
+                else jsonInput.click();
+            });
+        });
+        
+        console.log("CrowdVision JS: Listeners attached.");
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                selectedFile = e.target.files[0];
+                uploadZone.querySelector('.upload-zone__text').textContent = selectedFile.name;
+                uploadZone.style.borderColor = 'var(--accent-primary)';
+                updateUIState();
+            }
+        });
+
+        jsonInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                selectedJson = e.target.files[0];
+                console.log("JSON selected via input:", selectedJson.name);
+                jsonZone.querySelector('.upload-zone__text').textContent = selectedJson.name;
+                jsonZone.style.borderColor = 'var(--warning)';
+                updateUIState();
+            }
+        });
+
+        analyzeBtn.addEventListener('click', processFiles);
+
+        // ── Process Files ──
+        async function processFiles() {
+            if (!selectedFile) return;
+            
+            const isImage = selectedFile.type.startsWith('image/') || 
+                            /\.(jpg|jpeg|png)$/i.test(selectedFile.name);
+            if (!isImage) {
+                showError('Please upload an image file (JPG, JPEG, PNG)');
+                return;
+            }
+
+            // Show loading
+            loadingOverlay.classList.add('active');
+            results.classList.remove('visible');
+
+            try {
+                const formData = new FormData();
+                formData.append('image', selectedFile);
+                if (selectedJson) {
+                    formData.append('json', selectedJson);
+                    console.log("Processing in COMPARISON mode with:", selectedJson.name);
+                } else {
+                    console.log("Processing in STANDARD mode");
+                }
+
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                console.log("Response received. Status:", response.status);
+                const data = await response.json();
+                console.log("Parsed API Data:", data);
+                
+                const debugInfo = document.getElementById('debugInfo');
+                if (debugInfo) {
+                    debugInfo.style.display = 'block';
+                    debugInfo.textContent = `Last API Status: 200 OK | Pred: ${data.count} | GT: ${data.gt_count || 'N/A'}`;
+                }
+
+                if (data.error) {
+                    showError(data.error);
+                    loadingOverlay.classList.remove('active');
+                    return;
+                }
+
+                // Show results section EARLY to handle slow image rendering
+                loadingOverlay.classList.remove('active');
+                uploadArea.style.display = 'none';
+                controls.style.display = 'none';
+                results.classList.add('visible');
+
+                displayResults(data);
+            } catch (error) {
+                console.error("DEBUG - processFiles Error:", error);
+                showError('Error: ' + error.message);
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        // ── Display Results ──
+        function displayResults(data) {
+            console.log("DEBUG - displayResults called with:", data);
+            
+            try {
+                // Count
+                const countEl = document.getElementById('countValue');
+                if (countEl) {
+                    countEl.textContent = Math.round(data.count);
+                    countEl.className = 'count-card__value count-animate';
+                }
+
+                // Scene type tag
+                const sceneTag = document.getElementById('sceneTag');
+                if (sceneTag) {
+                    sceneTag.textContent = data.scene_type !== 'N/A'
+                        ? `${data.scene_type} Scene (${data.scene_confidence}%)`
+                        : 'Unified Model';
+                }
+
+                // Comparison
+                const compGrid = document.getElementById('comparisonGrid');
+                if (data.gt_count !== undefined) {
+                    console.log("DEBUG - Rendering Comparison Metrics");
+                    if (activeModeBadge) {
+                        activeModeBadge.textContent = 'Comparison Mode';
+                        activeModeBadge.className = 'mode-badge mode-badge--comparison';
+                    }
+                    if (compGrid) compGrid.style.display = 'grid';
+                    
+                    const elPred = document.getElementById('compPred');
+                    const elGT = document.getElementById('compGT');
+                    const elErr = document.getElementById('compError');
+                    
+                    if (elPred) elPred.textContent = data.count;
+                    if (elGT) elGT.textContent = data.gt_count;
+                    if (elErr) elErr.textContent = data.abs_error;
+                } else {
+                    console.log("DEBUG - Rendering Standard Metrics");
+                    if (activeModeBadge) {
+                        activeModeBadge.textContent = 'Standard Mode';
+                        activeModeBadge.className = 'mode-badge mode-badge--standard';
+                    }
+                    if (compGrid) compGrid.style.display = 'none';
+                }
+
+                // Filename
+                const fileNameEl = document.getElementById('fileName');
+                if (fileNameEl) fileNameEl.textContent = data.filename || "unknown";
+
+                // Images
+                const setImg = (id, b64) => {
+                    const el = document.getElementById(id);
+                    if (el && b64) el.src = 'data:image/png;base64,' + b64;
+                };
+
+                setImg('originalImage', data.original);
+                setImg('heatmapImage', data.heatmap);
+                setImg('overlayImage', data.overlay);
+
+                // Segmentation mask
+                const maskCard = document.getElementById('maskCard');
+                if (data.mask) {
+                    setImg('maskImage', data.mask);
+                    if (maskCard) maskCard.style.display = '';
+                } else {
+                    if (maskCard) maskCard.style.display = 'none';
+                }
+
+                // GT Visualization
+                const gtCard = document.getElementById('gtCard');
+                if (data.gt_visualization) {
+                    console.log("DEBUG - Showing GT Visualization Card");
+                    setImg('gtImage', data.gt_visualization);
+                    if (gtCard) gtCard.style.display = '';
+                } else {
+                    if (gtCard) gtCard.style.display = 'none';
+                }
+
+                // GT Heatmap & Overlay Visualization
+                const gtHeatmapCard = document.getElementById('gtHeatmapCard');
+                const gtOverlayCard = document.getElementById('gtOverlayCard');
+                
+                if (data.gt_heatmap && data.gt_overlay) {
+                    console.log("DEBUG - Showing GT Heatmap and Overlay Cards");
+                    setImg('gtHeatmapImage', data.gt_heatmap);
+                    setImg('gtOverlayImage', data.gt_overlay);
+                    if (gtHeatmapCard) gtHeatmapCard.style.display = '';
+                    if (gtOverlayCard) gtOverlayCard.style.display = '';
+                } else {
+                    if (gtHeatmapCard) gtHeatmapCard.style.display = 'none';
+                    if (gtOverlayCard) gtOverlayCard.style.display = 'none';
+                }
+
+                // Show results section
+                console.log("DEBUG - Finalizing UI visibility");
+                if (uploadArea) uploadArea.style.display = 'none';
+                if (controls) controls.style.display = 'none';
+                if (results) results.classList.add('visible');
+                
+            } catch (err) {
+                console.error("DEBUG - CRITICAL ERROR in displayResults:", err);
+                showError("UI Error: " + err.message);
+            }
+        }
+
+        // ── Reset ──
+        resetBtn.addEventListener('click', () => {
+            results.classList.remove('visible');
+            uploadArea.style.display = '';
+            controls.style.display = '';
+            fileInput.value = '';
+            jsonInput.value = '';
+            selectedFile = null;
+            selectedJson = null;
+            uploadZone.querySelector('.upload-zone__text').textContent = 'Select Image';
+            uploadZone.style.borderColor = '';
+            jsonZone.querySelector('.upload-zone__text').textContent = 'Add Annotation (Optional)';
+            jsonZone.style.borderColor = '';
+            updateUIState();
+        });
+
+        // ── Error Toast ──
+        function showError(message) {
+            errorToast.textContent = message;
+            errorToast.classList.add('visible');
+            setTimeout(() => {
+                errorToast.classList.remove('visible');
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

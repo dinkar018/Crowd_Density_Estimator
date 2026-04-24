@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv/
+venv/
+ENV/
+
+# Large Model Files
+checkpoints/*/
+!checkpoints/best_model_unified.pth
+
+
+# Output and Logs
+logs/
+results/
+visualizations/
+*.log
+
+# Datasets (should not be in repo)
+shanghaitech_dataset/
+*.h5
+*.json
+!3.json
+!evaluation_summary.json
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Misc
+*.jpeg
+*.jpg
+!test_image.jpg

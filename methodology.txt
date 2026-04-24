@@ -1,0 +1,71 @@
+================================================================================
+DEEP METHODOLOGY: CAN + CBAM UNIFIED CROWD ESTIMATION
+================================================================================
+
+1. GROUND TRUTH PREPROCESSING: THE "WHY" AND "HOW"
+──────────────────────────────────────────────────
+HOW:
+We transform discrete head points (x, y) into a continuous Density Map D(x) 
+using Gaussian kernels: D(x) = Σ N(x - x_i, σ_i).
+
+WHY:
+- Accuracy: Regression on exact pixels is too hard. Density maps provide 
+  a smooth "surface" for the model to learn.
+- The Integral Property: The total sum of all pixel values in the density map 
+  equals the number of people. This allows the model to learn counts via spatial 
+  distributions.
+
+STRATEGY:
+- Adaptive σ (Part A): σ is calculated as the average distance to the 3 nearest 
+  neighbors. In dense crowds, σ is small to prevent "density bleeding" between 
+  touching heads.
+- Fixed σ (Part B): σ is set to 15. In sparse scenes, local density varies too 
+  much for KNN to be stable, so a fixed kernel size provides consistency.
+- Downsampling (8x): Since the model produces 1/8th resolution outputs (due to 
+  VGG pooling), we sum-pool the ground truth to match.
+
+2. ARCHITECTURE ANALYSIS
+────────────────────────
+
+A. VGG-16 Frontend (The "Eyes"):
+- WHY: We use the first 10 convolutional layers (up to conv4_3). 
+- ROLE: It acts as the "General Feature Extractor." It’s pretrained on 
+  ImageNet, giving the model a head-start in recognizing shapes, textures, 
+  and patterns common to human heads.
+
+B. Scale-Aware Module (SAM) (The "Multi-Focal Lens"):
+- WHY: Parallel dilated convolutions with rates [1, 2, 3, 6].
+- ROLE: People at the back of a crowd are tiny (dilation=1); people at the 
+  front are large (dilation=6). SAM captures all these scales in ONE 
+  forwards pass, unlike CSRNet which uses serial dilations.
+
+C. CBAM Attention (The "Filter"):
+- Channel Attention: Learns WHICH feature maps (e.g., hair texture vs. sky 
+  blue) carry the most information for counting.
+- Spatial Attention: Learns WHERE in the image the people are, effectively 
+  suppressing noise from trees or buildings.
+
+3. THE TRAINING PIPELINE & SKIP CONNECTIONS
+───────────────────────────────────────────
+
+WHY SKIP CONNECTIONS (Residuals)?
+- Identity Mapping: In the SAM module, we use a skip connection: Output = 
+  Residual(Input) + Input. 
+- Gradient Flow: Deep networks suffer from "vanishing gradients" where early 
+  layers stop learning. Skip connections provide a "highway" for the gradient 
+  to flow back to the VGG frontend without distortion.
+
+WHY THE AUXILIARY CLASSIFIER?
+- Scene Awareness: A separate branch predicts "Dense" vs "Sparse". 
+- Shared Representation: This forces the VGG frontend to learn features that 
+  are not just good for counting, but also good for understanding the overall 
+  context of the crowd, making it a "Unified" model.
+
+4. INFERENCE PIPELINE: STEP-BY-STEP
+───────────────────────────────────
+1. Segment: DeepLabV3 hides background pixels (trees/buildings).
+2. Extract: VGG-16 pulls out low-level visual features.
+3. Scale: SAM extracts features at 4 different scales simultaneously.
+4. Attend: CBAM refines these features to focus only on heads.
+5. Predict: The Backend decoder converts 512 channels into a 1-channel map.
+6. Count: We sum the map to get the Final Count.
