@@ -51,3 +51,16 @@ Our unified model has been evaluated on the ShanghaiTech dataset (Part A and Par
 
 Visualizations and per-image evaluations can be found in the `results` folder.
 
+### ShanghaiTech Part A
+<div style="display: flex; justify-content: space-between;">
+  <img src="results/test_unified/part_A/scatter_pred_vs_actual.png" alt="Part A Scatter Plot" width="48%">
+  <img src="results/test_unified/part_A/error_distribution.png" alt="Part A Error Distribution" width="48%">
+</div>
+
+### ShanghaiTech Part B
+<div style="display: flex; justify-content: space-between;">
+  <img src="results/test_unified/part_B/scatter_pred_vs_actual.png" alt="Part B Scatter Plot" width="48%">
+  <img src="results/test_unified/part_B/error_distribution.png" alt="Part B Error Distribution" width="48%">
+</div>
+
+
