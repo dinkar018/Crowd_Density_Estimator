@@ -34,3 +34,20 @@ The integral property of the density map ensures that the sum of all pixel value
 1. Place input images in the intended directory.
 2. Ensure pre-trained weights are located in the `checkpoints` folder.
 3. Run `app.py` to start the web application for real-time visualization and crowd counting inference.
+
+## Results and Metrics
+
+Our unified model has been evaluated on the ShanghaiTech dataset (Part A and Part B). The performance metrics based on our testing are summarized below:
+
+| Metric | ShanghaiTech Part A | ShanghaiTech Part B |
+|--------|---------------------|---------------------|
+| **MAE**    | 74.20               | 22.24               |
+| **MSE**    | 13074.58            | 1074.49             |
+| **RMSE**   | 114.34              | 32.78               |
+| **MAPE**   | 18.46%              | 23.04%              |
+| **R²**     | 0.895               | 0.881               |
+| **SSIM**   | 0.599               | 0.483               |
+| **PSNR**   | 22.16               | 25.09               |
+
+Visualizations and per-image evaluations can be found in the `results` folder.
+
